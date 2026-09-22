@@ -10,6 +10,7 @@ import streamlit as st
 from src.data_loader import load_raw_data, validate_customer_data, CATEGORICAL_FEATURES, NUMERICAL_FEATURES
 from src.explainability import ChurnExplainer
 from src.recommender import generate_retention_recommendations
+from src.clv_calculator import calculate_customer_clv, calculate_clv_risk, get_clv_risk_summary
 
 st.set_page_config(
     page_title="AI Customer Churn Prediction System",
@@ -215,6 +216,11 @@ def main():
                         st.markdown('<div class="risk-medium">⚡ Medium Risk of Churn</div>', unsafe_allow_html=True)
                     else:
                         st.markdown('<div class="risk-low">✅ Low Risk (Retained Customer)</div>', unsafe_allow_html=True)
+                    
+                    est_clv = calculate_customer_clv(monthly_charges, tenure_months=24)
+                    rev_risk = round(est_clv * prob, 2)
+                    st.metric("Projected 24-Mo CLV", f"${est_clv:,.2f}")
+                    st.metric("Revenue at Risk", f"${rev_risk:,.2f}")
 
                 with pcol2:
                     st.markdown("#### SHAP Feature Impact Breakdown (Top Drivers)")
@@ -290,28 +296,64 @@ def main():
                         X_proc = explainer.preprocessor.transform(batch_df)
                         probs = explainer.model.predict_proba(X_proc)[:, 1]
 
-                        batch_df["predicted_churn_prob"] = np.round(probs, 4)
-                        batch_df["churn_risk_level"] = pd.cut(
-                            probs,
-                            bins=[-0.01, 0.30, 0.60, 1.0],
-                            labels=["Low Risk", "Medium Risk", "High Risk"]
-                        )
+                        annotated_df = calculate_clv_risk(batch_df, probs)
+                        summary = get_clv_risk_summary(annotated_df)
 
-                        st.markdown("### Prediction Results Summary")
-                        sc1, sc2, sc3 = st.columns(3)
-                        sc1.metric("High Risk Customers", int((batch_df["churn_risk_level"] == "High Risk").sum()))
-                        sc2.metric("Medium Risk Customers", int((batch_df["churn_risk_level"] == "Medium Risk").sum()))
-                        sc3.metric("Low Risk Customers", int((batch_df["churn_risk_level"] == "Low Risk").sum()))
+                        st.markdown("### 📊 Portfolio Prediction & Financial Exposure Summary")
+                        sc1, sc2, sc3, sc4 = st.columns(4)
+                        sc1.metric("High Risk Customers", summary["high_risk_count"])
+                        sc2.metric("Portfolio CLV (24-Mo)", f"${summary['total_portfolio_clv']:,.2f}")
+                        sc3.metric("Total Revenue at Risk", f"${summary['total_revenue_at_risk']:,.2f}")
+                        sc4.metric("High-Risk Revenue Loss", f"${summary['high_risk_revenue_loss']:,.2f}")
 
-                        st.dataframe(batch_df.head(20))
+                        bc1, bc2 = st.columns([1, 1])
+                        with bc1:
+                            st.markdown("#### Risk Level Distribution")
+                            risk_counts = annotated_df["risk_tier"].value_counts().reset_index()
+                            risk_counts.columns = ["Risk Tier", "Count"]
+                            fig_donut = px.pie(
+                                risk_counts,
+                                names="Risk Tier",
+                                values="Count",
+                                hole=0.4,
+                                color="Risk Tier",
+                                color_discrete_map={
+                                    "High Risk": "#EF4444",
+                                    "Medium Risk": "#F59E0B",
+                                    "Low Risk": "#10B981"
+                                },
+                                title="Customer Portfolio Churn Risk Breakdown"
+                            )
+                            st.plotly_chart(fig_donut, use_container_width=True)
 
-                        csv_data = batch_df.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            label="📥 Download Annotated Predictions CSV",
-                            data=csv_data,
-                            file_name="customer_churn_predictions.csv",
-                            mime="text/csv"
-                        )
+                        with bc2:
+                            st.markdown("#### Filter Customer Records")
+                            selected_tier = st.selectbox("Filter Table by Risk Tier", ["All", "High Risk", "Medium Risk", "Low Risk"])
+                            if selected_tier != "All":
+                                display_df = annotated_df[annotated_df["risk_tier"] == selected_tier]
+                            else:
+                                display_df = annotated_df
+
+                            st.dataframe(display_df.head(20))
+
+                        dcol1, dcol2 = st.columns(2)
+                        with dcol1:
+                            csv_data = annotated_df.to_csv(index=False).encode("utf-8")
+                            st.download_button(
+                                label="📥 Download Full Annotated Predictions CSV",
+                                data=csv_data,
+                                file_name="customer_churn_predictions_full.csv",
+                                mime="text/csv"
+                            )
+                        with dcol2:
+                            high_risk_only = annotated_df[annotated_df["risk_tier"] == "High Risk"]
+                            high_risk_csv = high_risk_only.to_csv(index=False).encode("utf-8")
+                            st.download_button(
+                                label="⚠️ Download High Risk Customers Only CSV",
+                                data=high_risk_csv,
+                                file_name="high_risk_churn_customers.csv",
+                                mime="text/csv"
+                            )
                     except Exception as e:
                         st.error(f"Error processing batch file: {str(e)}")
 
