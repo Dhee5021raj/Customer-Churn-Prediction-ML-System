@@ -133,6 +133,15 @@ def train_and_evaluate_models(tune_hyperparams: bool = False) -> Dict[str, Dict[
         json.dump(results, f, indent=4)
     print("Evaluation metrics saved to models/metrics.json")
 
+    # Generate & save evaluation figures
+    try:
+        from src.evaluator import plot_confusion_matrices, plot_roc_curves
+        cm_path = plot_confusion_matrices(results)
+        roc_path = plot_roc_curves(models, X_test, y_test)
+        print(f"Saved evaluation figures: {cm_path}, {roc_path}")
+    except Exception as e:
+        print(f"Warning: Could not generate evaluation figures: {e}")
+
     return results
 
 if __name__ == "__main__":
