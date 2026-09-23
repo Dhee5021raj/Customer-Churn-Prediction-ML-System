@@ -133,6 +133,14 @@ def train_and_evaluate_models(tune_hyperparams: bool = False) -> Dict[str, Dict[
         json.dump(results, f, indent=4)
     print("Evaluation metrics saved to models/metrics.json")
 
+    # Register model version artifact
+    try:
+        from src.model_registry import register_model
+        reg_entry = register_model(best_xgboost, preprocessor, results["XGBoost"], version="v1.0.0")
+        print(f"Model registered in registry.json: version {reg_entry['version']}")
+    except Exception as e:
+        print(f"Warning: Could not register model in manifest: {e}")
+
     # Generate & save evaluation figures
     try:
         from src.evaluator import plot_confusion_matrices, plot_roc_curves
