@@ -11,6 +11,8 @@ from src.data_loader import load_raw_data, validate_customer_data, CATEGORICAL_F
 from src.explainability import ChurnExplainer
 from src.recommender import generate_retention_recommendations
 from src.clv_calculator import calculate_customer_clv, calculate_clv_risk, get_clv_risk_summary
+from src.what_if_analyzer import simulate_what_if_scenario
+from src.auditor import log_prediction_audit
 
 st.set_page_config(
     page_title="AI Customer Churn Prediction System",
@@ -270,6 +272,40 @@ def main():
 
                 for r in recs:
                     st.write(r)
+
+                # Log audit trail
+                try:
+                    log_prediction_audit(sample_df, np.array([prob]), source="single_predictor")
+                except Exception:
+                    pass
+
+                # What-If Scenario Simulator
+                st.markdown("---")
+                with st.expander("🧪 What-If Scenario Simulator (Counterfactual Analysis)"):
+                    st.markdown("Simulate contract or service changes to see how much churn risk drops and how much CLV revenue is saved.")
+                    wcol1, wcol2 = st.columns(2)
+                    with wcol1:
+                        new_contract = st.selectbox("Simulate New Contract", ["Month-to-month", "One year", "Two year"], index=["Month-to-month", "One year", "Two year"].index(contract))
+                        new_tech_support = st.selectbox("Simulate Tech Support", ["No", "Yes", "No internet service"], index=["No", "Yes", "No internet service"].index(tech_support))
+                    with wcol2:
+                        new_security = st.selectbox("Simulate Online Security", ["No", "Yes", "No internet service"], index=["No", "Yes", "No internet service"].index(online_security))
+                        new_payment = st.selectbox("Simulate Payment Method", [
+                            "Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"
+                        ], index=["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"].index(payment_method))
+
+                    if st.button("⚡ Evaluate What-If Impact"):
+                        mods = {
+                            "contract": new_contract,
+                            "tech_support": new_tech_support,
+                            "online_security": new_security,
+                            "payment_method": new_payment
+                        }
+                        sim_res = simulate_what_if_scenario(explainer, input_profile, mods)
+                        
+                        mcol1, mcol2, mcol3 = st.columns(3)
+                        mcol1.metric("Simulated Risk", f"{sim_res['mod_prob'] * 100:.1f}%", f"{sim_res['risk_delta_pct']:.1f}% risk", delta_color="inverse")
+                        mcol2.metric("Simulated Revenue at Risk", f"${sim_res['mod_rev_risk']:,.2f}")
+                        mcol3.metric("Projected Revenue Saved", f"${sim_res['net_revenue_saved']:,.2f}")
 
             except Exception as e:
                 st.error(f"Error making prediction: {str(e)}")
