@@ -13,6 +13,12 @@ from src.recommender import generate_retention_recommendations
 from src.clv_calculator import calculate_customer_clv, calculate_clv_risk, get_clv_risk_summary
 from src.what_if_analyzer import simulate_what_if_scenario
 from src.auditor import log_prediction_audit
+from src.drift_detector import calculate_feature_drift
+from src.report_generator import generate_customer_intervention_tasklist
+from src.model_registry import get_latest_model_metadata
+from src.segmenter import segment_customers, get_segment_summary
+from src.fairness_checker import run_fairness_report
+from src.data_profiler import profile_dataset, check_data_health
 
 st.set_page_config(
     page_title="AI Customer Churn Prediction System",
@@ -61,7 +67,8 @@ def main():
         "📊 Executive Overview & EDA",
         "🔮 Individual Customer Predictor",
         "📁 Batch CSV Predictor",
-        "🤖 Model Performance & Metrics"
+        "🤖 Model Performance & Metrics",
+        "📈 Data Drift & Audit Logs"
     ])
 
     # -------------------------------------------------------------
@@ -244,6 +251,19 @@ def main():
                     fig_shap.update_layout(yaxis={"categoryorder": "total ascending"})
                     st.plotly_chart(fig_shap, use_container_width=True)
 
+                    # SHAP Export as PNG (via kaleido if available)
+                    try:
+                        import io
+                        shap_png_bytes = fig_shap.to_image(format="png", width=900, height=500)
+                        st.download_button(
+                            label="📥 Download SHAP Chart as PNG",
+                            data=shap_png_bytes,
+                            file_name="shap_feature_impact.png",
+                            mime="image/png",
+                        )
+                    except Exception:
+                        pass  # kaleido not installed — silently skip
+
                 # Retention Strategy
                 st.markdown("### 💡 Recommended Retention Action")
                 input_profile = {
@@ -390,8 +410,95 @@ def main():
                                 file_name="high_risk_churn_customers.csv",
                                 mime="text/csv"
                             )
+
+                        # Intervention Tasklist Report
+                        st.markdown("### 📋 Customer Intervention Tasklist")
+                        tasklist_df = generate_customer_intervention_tasklist(annotated_df)
+                        st.dataframe(tasklist_df.head(20), use_container_width=True)
+                        tasklist_csv = tasklist_df.to_csv(index=False).encode("utf-8")
+                        st.download_button(
+                            label="📋 Download Intervention Tasklist CSV",
+                            data=tasklist_csv,
+                            file_name="customer_intervention_tasklist.csv",
+                            mime="text/csv"
+                        )
+
+                        # Audit log batch predictions
+                        try:
+                            log_prediction_audit(batch_df, annotated_df["churn_probability"].values, source="batch_predictor")
+                        except Exception:
+                            pass
+
+                        # ── Cohort Segmentation Explorer ──────────────────
+                        st.markdown("---")
+                        st.markdown("### 🧩 Customer Cohort Segmentation Explorer")
+                        try:
+                            seg_df = segment_customers(annotated_df, n_clusters=4)
+                            seg_summary = get_segment_summary(seg_df)
+
+                            seg_col1, seg_col2 = st.columns(2)
+                            with seg_col1:
+                                fig_seg = px.bar(
+                                    seg_summary,
+                                    x="customer_segment",
+                                    y="avg_churn_probability",
+                                    color="customer_segment",
+                                    title="Avg Churn Probability by Cohort",
+                                    labels={"avg_churn_probability": "Avg Churn Prob", "customer_segment": "Segment"},
+                                )
+                                st.plotly_chart(fig_seg, use_container_width=True)
+
+                            with seg_col2:
+                                if "avg_clv" in seg_summary.columns:
+                                    fig_clv_seg = px.bar(
+                                        seg_summary,
+                                        x="customer_segment",
+                                        y="avg_clv",
+                                        color="customer_segment",
+                                        title="Avg CLV by Cohort",
+                                        labels={"avg_clv": "Avg CLV ($)", "customer_segment": "Segment"},
+                                    )
+                                    st.plotly_chart(fig_clv_seg, use_container_width=True)
+
+                            st.dataframe(seg_summary, use_container_width=True)
+
+                            seg_filter = st.selectbox("Filter Table by Segment", ["All"] + list(seg_summary["customer_segment"]))
+                            filtered_seg_df = seg_df if seg_filter == "All" else seg_df[seg_df["customer_segment"] == seg_filter]
+                            st.dataframe(filtered_seg_df.head(15), use_container_width=True)
+
+                        except Exception as e:
+                            st.warning(f"Segmentation failed: {e}")
+
+                        # ── Model Fairness Snapshot ────────────────────────
+                        st.markdown("---")
+                        st.markdown("### ⚖️ Model Fairness Snapshot")
+                        st.caption("Checks demographic parity and equal opportunity across sensitive groups.")
+                        try:
+                            sensitive_cols_available = [c for c in ["contract_type", "senior_citizen", "gender"] if c in annotated_df.columns]
+                            if sensitive_cols_available and "churn" in annotated_df.columns:
+                                y_true_batch = annotated_df["churn"].values
+                                y_pred_batch = (annotated_df["churn_probability"] >= 0.5).astype(int).values
+                                fairness_report = run_fairness_report(y_true_batch, y_pred_batch, annotated_df, sensitive_cols_available)
+
+                                for col, fr in fairness_report.items():
+                                    dp = fr["demographic_parity"]
+                                    eo = fr["equal_opportunity"]
+                                    dp_badge = "✅ Pass" if dp["passes_4_5ths_rule"] else "⚠️ Fail"
+                                    eo_badge = "✅ Pass" if eo["passes_equal_opportunity"] else "⚠️ Fail"
+                                    with st.expander(f"Fairness: `{col}` — DP {dp_badge} | EO {eo_badge}"):
+                                        fc1, fc2 = st.columns(2)
+                                        fc1.metric("Demographic Parity Ratio", dp["ratio"], help="4/5ths rule: ratio ≥ 0.80 = Pass")
+                                        fc2.metric("Equal Opportunity Ratio", eo["ratio"], help="TPR ratio ≥ 0.80 = Pass")
+                                        group_rows = [{"Group": g, **m} for g, m in fr["groups"].items()]
+                                        st.dataframe(pd.DataFrame(group_rows), use_container_width=True)
+                            else:
+                                st.info("Fairness check requires 'churn' ground-truth label column in the uploaded CSV.")
+                        except Exception as e:
+                            st.warning(f"Fairness check failed: {e}")
+
                     except Exception as e:
                         st.error(f"Error processing batch file: {str(e)}")
+
 
     # -------------------------------------------------------------
     # TAB 4: MODEL PERFORMANCE & METRICS
@@ -433,6 +540,105 @@ def main():
                     st.warning(f"Could not render global SHAP importance: {ex}")
         else:
             st.info("Metrics not found. Run model training script `python src/train.py` to populate performance data.")
+
+    # -------------------------------------------------------------
+    # TAB 5: DATA DRIFT & AUDIT LOGS
+    # -------------------------------------------------------------
+    elif menu == "📈 Data Drift & Audit Logs":
+        st.subheader("System Health Monitor — Data Drift & Prediction Audit")
+
+        # Model Registry Info
+        st.markdown("### 🗂️ Model Registry — Latest Registered Version")
+        try:
+            reg_meta = get_latest_model_metadata()
+            if reg_meta:
+                rcol1, rcol2, rcol3 = st.columns(3)
+                rcol1.metric("Version", reg_meta.get("version", "—"))
+                rcol2.metric("Registered", reg_meta.get("timestamp", "—")[:19].replace("T", " "))
+                rcol3.metric("Status", reg_meta.get("status", "—"))
+            else:
+                st.info("No model registry found. Run `python src/train.py` first.")
+        except Exception as e:
+            st.warning(f"Could not load registry: {e}")
+
+        st.markdown("---")
+
+        # Feature Drift Detection
+        st.markdown("### 📊 Feature Distribution Drift Detection (vs Training Baseline)")
+        st.caption("Upload a current inference CSV to compare against training distribution.")
+        drift_file = st.file_uploader("Upload Customer CSV for Drift Analysis", type=["csv"], key="drift_upload")
+
+        if drift_file:
+            drift_df = pd.read_csv(drift_file)
+            is_valid, missing = validate_customer_data(drift_df, require_target=False)
+            if not is_valid:
+                st.error(f"⚠️ Missing columns: `{', '.join(missing)}`")
+            else:
+                drift_res = calculate_feature_drift(df, drift_df)
+                dc1, dc2, dc3 = st.columns(3)
+                dc1.metric("Total Features Checked", drift_res["total_features"])
+                dc2.metric("Drifted Features", drift_res["drifted_features_count"])
+                dc3.metric("Drift Detected", "⚠️ YES" if drift_res["drift_detected"] else "✅ NO")
+
+                detail_df = pd.DataFrame([
+                    {
+                        "Feature": feat,
+                        "Type": info["type"],
+                        "Test": info["test"],
+                        "Drift Score": info.get("statistic", info.get("max_shift", "—")),
+                        "P-Value": info.get("p_value", "—"),
+                        "Drifted": "⚠️ YES" if info["is_drifted"] else "✅ NO"
+                    }
+                    for feat, info in drift_res["feature_details"].items()
+                ])
+                st.dataframe(detail_df, use_container_width=True)
+
+        st.markdown("---")
+
+        # Prediction Audit Log
+        st.markdown("### 📋 Prediction Audit Log")
+        audit_path = os.path.join("logs", "predictions_audit.csv")
+        if os.path.exists(audit_path):
+            audit_df = pd.read_csv(audit_path)
+            ac1, ac2 = st.columns(2)
+            ac1.metric("Total Predictions Logged", len(audit_df))
+            ac2.metric("Latest Prediction Time", audit_df["prediction_timestamp"].iloc[-1][:19].replace("T", " ") if "prediction_timestamp" in audit_df.columns else "—")
+            st.dataframe(audit_df.tail(20), use_container_width=True)
+        else:
+            st.info("No prediction audit log found. Run a single or batch prediction first.")
+
+        st.markdown("---")
+
+        # Data Quality Profiler
+        st.markdown("### 🔬 Data Quality Profiler")
+        st.caption("Upload a CSV to run a full column-level data quality and distribution profile.")
+        profiler_file = st.file_uploader("Upload CSV for Quality Profile", type=["csv"], key="profiler_upload")
+
+        if profiler_file:
+            prof_df = pd.read_csv(profiler_file)
+            health = check_data_health(prof_df)
+
+            hcol1, hcol2, hcol3, hcol4 = st.columns(4)
+            hcol1.metric("Total Rows", health["total_rows"])
+            hcol2.metric("Total Columns", health["total_cols"])
+            hcol3.metric("Missing Cols", len(health["missing_cols"]))
+            hcol4.metric(
+                "Overall Health",
+                health["overall_health"],
+                delta="✅" if health["overall_health"] == "Good" else "⚠️",
+                delta_color="normal" if health["overall_health"] == "Good" else "inverse",
+            )
+
+            if health["constant_cols"]:
+                st.warning(f"⚠️ Constant columns (zero variance): `{', '.join(health['constant_cols'])}`")
+            if health["skewed_cols"]:
+                st.warning(f"📐 Highly skewed columns (|skew| > 2.0): `{', '.join(health['skewed_cols'])}`")
+            if health["high_cardinality_cols"]:
+                st.info(f"🔢 High cardinality columns (≥50 unique): `{', '.join(health['high_cardinality_cols'])}`")
+
+            profile_table = profile_dataset(prof_df)
+            st.markdown("#### Column-Level Profile")
+            st.dataframe(profile_table, use_container_width=True)
 
 if __name__ == "__main__":
     main()
