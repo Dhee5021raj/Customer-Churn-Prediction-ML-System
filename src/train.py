@@ -141,6 +141,15 @@ def train_and_evaluate_models(tune_hyperparams: bool = False) -> Dict[str, Dict[
     except Exception as e:
         print(f"Warning: Could not register model in manifest: {e}")
 
+    # Update model leaderboard
+    try:
+        from src.model_leaderboard import update_leaderboard
+        for m_name, m_metrics in results.items():
+            update_leaderboard(m_name, "v1.0.0", m_metrics)
+        print("Model leaderboard updated in models/leaderboard.json")
+    except Exception as e:
+        print(f"Warning: Could not update leaderboard: {e}")
+
     # Generate & save evaluation figures
     try:
         from src.evaluator import plot_confusion_matrices, plot_roc_curves
@@ -153,4 +162,26 @@ def train_and_evaluate_models(tune_hyperparams: bool = False) -> Dict[str, Dict[
     return results
 
 if __name__ == "__main__":
-    train_and_evaluate_models()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Customer Churn Prediction ML Pipeline")
+    parser.add_argument("--tune", action="store_true", help="Enable XGBoost hyperparameter tuning via RandomizedSearchCV")
+    parser.add_argument("--version", type=str, default="v1.0.0", help="Semantic version tag for model registry (e.g. v1.1.0)")
+    parser.add_argument("--eval", action="store_true", help="Generate and save evaluation figure artifacts")
+    args = parser.parse_args()
+
+    results = train_and_evaluate_models(tune_hyperparams=args.tune)
+
+    if args.version != "v1.0.0":
+        try:
+            import joblib
+            from src.model_registry import register_model
+            from src.model_leaderboard import update_leaderboard
+            model = joblib.load("models/xgboost_model.pkl")
+            preprocessor = joblib.load("models/preprocessor.pkl")
+            reg_entry = register_model(model, preprocessor, results["XGBoost"], version=args.version)
+            update_leaderboard("XGBoost", args.version, results["XGBoost"])
+            print(f"Model re-registered as version: {reg_entry['version']}")
+        except Exception as e:
+            print(f"Warning: Could not re-register model: {e}")
+

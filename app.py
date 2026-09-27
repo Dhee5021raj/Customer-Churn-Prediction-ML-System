@@ -19,6 +19,9 @@ from src.model_registry import get_latest_model_metadata
 from src.segmenter import segment_customers, get_segment_summary
 from src.fairness_checker import run_fairness_report
 from src.data_profiler import profile_dataset, check_data_health
+from src.risk_classifier import classify_risk_band, annotate_dataframe_with_risk_bands
+from src.trend_projector import project_retention_scenario, get_trend_summary
+from src.model_leaderboard import get_leaderboard, get_champion_model
 
 st.set_page_config(
     page_title="AI Customer Churn Prediction System",
@@ -219,6 +222,9 @@ def main():
 
                 with pcol1:
                     st.metric("Predicted Churn Probability", f"{prob * 100:.1f}%")
+                    risk_info = classify_risk_band(prob)
+                    st.info(f"**Risk Band:** {risk_info['band']} ({risk_info['confidence']} Confidence)\n\n_{risk_info['label']}_")
+
                     if prob >= 0.60:
                         st.markdown('<div class="risk-high">⚠️ High Risk of Churn</div>', unsafe_allow_html=True)
                     elif prob >= 0.30:
@@ -326,6 +332,46 @@ def main():
                         mcol1.metric("Simulated Risk", f"{sim_res['mod_prob'] * 100:.1f}%", f"{sim_res['risk_delta_pct']:.1f}% risk", delta_color="inverse")
                         mcol2.metric("Simulated Revenue at Risk", f"${sim_res['mod_rev_risk']:,.2f}")
                         mcol3.metric("Projected Revenue Saved", f"${sim_res['net_revenue_saved']:,.2f}")
+
+                # Multi-Period Churn Trend Projection
+                st.markdown("---")
+                with st.expander("📈 Multi-Period Churn Trajectory Projection", expanded=True):
+                    st.markdown("Forecasts churn risk trajectory over 12 billing cycles comparing baseline vs proactive retention intervention.")
+                    scenarios = project_retention_scenario(prob, periods=12, intervention_decay=0.05)
+                    scen_df = pd.DataFrame(scenarios)
+
+                    fig_trend = go.Figure()
+                    fig_trend.add_trace(go.Scatter(
+                        x=scen_df["period"],
+                        y=scen_df["baseline_probability"],
+                        mode="lines+markers",
+                        name="Baseline (No Action)",
+                        line=dict(color="#EF4444", width=3)
+                    ))
+                    fig_trend.add_trace(go.Scatter(
+                        x=scen_df["period"],
+                        y=scen_df["intervention_probability"],
+                        mode="lines+markers",
+                        name="With Retention Action (5% decay/mo)",
+                        line=dict(color="#10B981", width=3, dash="dash")
+                    ))
+                    fig_trend.update_layout(
+                        title="12-Month Projected Churn Probability Trajectory",
+                        xaxis_title="Billing Period (Month)",
+                        yaxis_title="Projected Churn Probability",
+                        yaxis=dict(range=[0, 1]),
+                        hovermode="x unified"
+                    )
+                    st.plotly_chart(fig_trend, use_container_width=True)
+
+                    tcol1, tcol2 = st.columns(2)
+                    tcol1.metric("Projected Churn at Month 12 (Baseline)", f"{scen_df['baseline_probability'].iloc[-1]*100:.1f}%")
+                    tcol2.metric(
+                        "Projected Churn at Month 12 (With Retention)",
+                        f"{scen_df['intervention_probability'].iloc[-1]*100:.1f}%",
+                        f"-{(scen_df['baseline_probability'].iloc[-1] - scen_df['intervention_probability'].iloc[-1])*100:.1f}%",
+                        delta_color="inverse"
+                    )
 
             except Exception as e:
                 st.error(f"Error making prediction: {str(e)}")
@@ -538,6 +584,21 @@ def main():
                     st.plotly_chart(fig_global_shap, use_container_width=True)
                 except Exception as ex:
                     st.warning(f"Could not render global SHAP importance: {ex}")
+
+            # Model Champion-Challenger Leaderboard
+            st.markdown("---")
+            with st.expander("🏆 Model Champion-Challenger Leaderboard", expanded=True):
+                try:
+                    champ = get_champion_model()
+                    if champ:
+                        st.success(f"🥇 **Current Champion:** `{champ['model_name']} ({champ['version']})` — ROC-AUC: `{champ.get('roc_auc', '—')}` | F1-Score: `{champ.get('f1_score', '—')}`")
+                    l_df = get_leaderboard()
+                    if not l_df.empty:
+                        st.dataframe(l_df, use_container_width=True)
+                    else:
+                        st.info("No models registered in leaderboard yet. Retrain with `python src/train.py` to record entries.")
+                except Exception as l_ex:
+                    st.warning(f"Could not load model leaderboard: {l_ex}")
         else:
             st.info("Metrics not found. Run model training script `python src/train.py` to populate performance data.")
 
