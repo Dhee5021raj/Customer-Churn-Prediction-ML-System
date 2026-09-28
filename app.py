@@ -22,6 +22,7 @@ from src.data_profiler import profile_dataset, check_data_health
 from src.risk_classifier import classify_risk_band, annotate_dataframe_with_risk_bands
 from src.trend_projector import project_retention_scenario, get_trend_summary
 from src.model_leaderboard import get_leaderboard, get_champion_model
+from src.retention_roi import simulate_portfolio_retention_roi, get_budget_allocation_recommendation
 
 st.set_page_config(
     page_title="AI Customer Churn Prediction System",
@@ -541,6 +542,40 @@ def main():
                                 st.info("Fairness check requires 'churn' ground-truth label column in the uploaded CSV.")
                         except Exception as e:
                             st.warning(f"Fairness check failed: {e}")
+
+                        # ── Retention Campaign ROI & Budget Simulator ──────
+                        st.markdown("---")
+                        st.markdown("### 💰 Retention Campaign Financial ROI Simulator")
+                        st.caption("Forecast portfolio net financial gain, campaign ROI, and optimal retention budget allocation.")
+                        try:
+                            rcol1, rcol2, rcol3 = st.columns(3)
+                            contact_cost = rcol1.number_input("Cost per Contact ($)", min_value=1.0, max_value=50.0, value=5.0, step=1.0)
+                            incentive_val = rcol2.number_input("Incentive / Discount Cost ($)", min_value=5.0, max_value=200.0, value=30.0, step=5.0)
+                            save_rate = rcol3.slider("Target Save Rate (%)", min_value=5, max_value=60, value=25, step=5) / 100.0
+
+                            roi_res = simulate_portfolio_retention_roi(
+                                annotated_df,
+                                cost_per_contact=contact_cost,
+                                offer_incentive_cost=incentive_val,
+                                success_rate=save_rate
+                            )
+                            ov = roi_res["overall"]
+
+                            m1, m2, m3, m4 = st.columns(4)
+                            m1.metric("Campaign Cost", f"${ov['total_campaign_cost']:,.0f}")
+                            m2.metric("Gross Revenue Saved", f"${ov['gross_revenue_saved']:,.0f}")
+                            m3.metric("Net Financial Benefit", f"${ov['net_financial_benefit']:,.0f}", f"{ov['roi_percentage']}% ROI")
+                            m4.metric("Payback Ratio", f"{ov['payback_ratio']:.1f}x", f"Break-even: {ov['break_even_customers']} cust")
+
+                            st.markdown("#### Risk Tier ROI Breakdown")
+                            st.dataframe(roi_res["tier_breakdown"], use_container_width=True)
+
+                            with st.expander("📊 Budget Allocation Recommendation"):
+                                total_alloc_budget = st.number_input("Total Retention Budget ($)", min_value=1000.0, max_value=500000.0, value=25000.0, step=5000.0)
+                                alloc_table = get_budget_allocation_recommendation(total_alloc_budget, annotated_df, cost_per_contact=contact_cost, offer_incentive_cost=incentive_val)
+                                st.dataframe(alloc_table, use_container_width=True)
+                        except Exception as e:
+                            st.warning(f"ROI simulation failed: {e}")
 
                     except Exception as e:
                         st.error(f"Error processing batch file: {str(e)}")
