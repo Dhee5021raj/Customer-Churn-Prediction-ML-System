@@ -23,6 +23,8 @@ from src.risk_classifier import classify_risk_band, annotate_dataframe_with_risk
 from src.trend_projector import project_retention_scenario, get_trend_summary
 from src.model_leaderboard import get_leaderboard, get_champion_model
 from src.retention_roi import simulate_portfolio_retention_roi, get_budget_allocation_recommendation
+from src.survival_simulator import simulate_customer_survival_curve, calculate_expected_customer_lifetime, compare_contract_survival_curves
+from src.retrain_pipeline import run_retraining_cycle
 
 st.set_page_config(
     page_title="AI Customer Churn Prediction System",
@@ -374,6 +376,34 @@ def main():
                         delta_color="inverse"
                     )
 
+                # Customer Survival Curve & Retention Lifespan
+                st.markdown("---")
+                with st.expander("⏳ Customer Survival Curve & Retention Lifespan (Actuarial Forecast)", expanded=True):
+                    st.markdown("Projects 24-month customer retention survival probability S(t) comparing Month-to-month, 1-Year, and 2-Year contracts.")
+                    surv_curve = simulate_customer_survival_curve(prob, tenure_months=tenure, contract_type=contract, periods=24)
+                    surv_stats = calculate_expected_customer_lifetime(surv_curve)
+
+                    sc1, sc2, sc3 = st.columns(3)
+                    sc1.metric("Expected Half-Life (Median Lifespan)", f"{surv_stats['median_survival_months']} months")
+                    sc2.metric("12-Month Retention Probability", f"{surv_stats['survival_at_12m']*100:.1f}%")
+                    sc3.metric("24-Month Retention Probability", f"{surv_stats['survival_at_24m']*100:.1f}%")
+
+                    comp_surv_df = compare_contract_survival_curves(prob, tenure_months=tenure, periods=24)
+                    fig_surv = px.line(
+                        comp_surv_df,
+                        x="month",
+                        y=["Month-to-month", "One year", "Two year"],
+                        title="24-Month Survival Probability S(t) by Contract Type",
+                        labels={"month": "Month Horizon", "value": "Survival Probability S(t)", "variable": "Contract Type"},
+                        color_discrete_map={
+                            "Month-to-month": "#EF4444",
+                            "One year": "#F59E0B",
+                            "Two year": "#10B981"
+                        }
+                    )
+                    fig_surv.update_layout(yaxis=dict(range=[0, 1]), hovermode="x unified")
+                    st.plotly_chart(fig_surv, use_container_width=True)
+
             except Exception as e:
                 st.error(f"Error making prediction: {str(e)}")
 
@@ -634,6 +664,33 @@ def main():
                         st.info("No models registered in leaderboard yet. Retrain with `python src/train.py` to record entries.")
                 except Exception as l_ex:
                     st.warning(f"Could not load model leaderboard: {l_ex}")
+
+            # Automated Retraining & Challenger Pipeline
+            with st.expander("🔄 Automated Retraining Pipeline (Champion vs Challenger)", expanded=False):
+                st.markdown("Trigger an automated retraining cycle on active customer records. The challenger model is evaluated against the current champion and promoted only if it achieves superior ROC-AUC.")
+                next_ver = st.text_input("Candidate Version Tag", value="v1.2.0")
+                min_imp = st.slider("Minimum ROC-AUC Improvement Margin", min_value=0.0, max_value=0.05, value=0.005, step=0.001, format="%.3f")
+                
+                if st.button("🚀 Execute Retraining Cycle"):
+                    with st.spinner("Retraining candidate model and running comparative benchmark..."):
+                        try:
+                            retrain_res = run_retraining_cycle(df, version_tag=next_ver, tune=False, min_improvement=min_imp)
+                            cand_m = retrain_res["candidate_metrics"]
+                            eval_m = retrain_res["evaluation"]
+
+                            if eval_m["promoted"]:
+                                st.success(f"🎉 **{eval_m['decision']}**")
+                            else:
+                                st.warning(f"🛡️ **{eval_m['decision']}**")
+
+                            rc1, rc2, rc3 = st.columns(3)
+                            rc1.metric("Candidate ROC-AUC", f"{cand_m['roc_auc']:.4f}")
+                            rc2.metric("Champion ROC-AUC", f"{eval_m['champion_score']:.4f}" if eval_m['champion_score'] else "—")
+                            rc3.metric("ROC-AUC Delta", f"{eval_m['delta']:+.4f}", delta_color="normal" if eval_m["promoted"] else "inverse")
+
+                            st.json(cand_m)
+                        except Exception as retrain_err:
+                            st.error(f"Retraining failed: {retrain_err}")
         else:
             st.info("Metrics not found. Run model training script `python src/train.py` to populate performance data.")
 

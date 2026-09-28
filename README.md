@@ -26,13 +26,15 @@ An end-to-end Machine Learning system for predicting customer churn risk, analyz
 - **Multi-Period Churn Trajectory Projector**: Forecasts 12-month churn risk trajectories comparing baseline trends against proactive retention decay models ([`src/trend_projector.py`](file:///D:/Projects/AIML/src/trend_projector.py)).
 - **Model Champion-Challenger Leaderboard**: Persists benchmark rankings in `models/leaderboard.json`, tracking active champion models by ROC-AUC and version differentials ([`src/model_leaderboard.py`](file:///D:/Projects/AIML/src/model_leaderboard.py)).
 - **Customer Retention Campaign ROI Simulator**: Simulates campaign economics, break-even customer volume, payback ratio, and optimal tier-based budget allocation ([`src/retention_roi.py`](file:///D:/Projects/AIML/src/retention_roi.py)).
+- **Automated Model Retraining Pipeline**: Monitors data drift triggers, trains candidate challenger models, compares against active champion, and conditionally promotes model artifacts ([`src/retrain_pipeline.py`](file:///D:/Projects/AIML/src/retrain_pipeline.py)).
+- **Customer Survival Curve & Hazard Rate Simulator**: Actuarial customer retention survival modeling ($S(t)$), hazard functions ($h(t)$), and median half-life tenure forecasting ([`src/survival_simulator.py`](file:///D:/Projects/AIML/src/survival_simulator.py)).
 - **Centralized Configuration & Logging**: Manages system paths, feature definitions, and pipeline logs ([`src/config.py`](file:///D:/Projects/AIML/src/config.py)).
-- **Automated Test Suite**: 87 comprehensive unit tests across all analytical and ML modules ([`tests/`](file:///D:/Projects/AIML/tests/)).
+- **Automated Test Suite**: 99 comprehensive unit tests across all analytical and ML modules ([`tests/`](file:///D:/Projects/AIML/tests/)).
 - **Interactive 5-Tab Streamlit Web Dashboard** ([`app.py`](file:///D:/Projects/AIML/app.py)):
   - **📊 Executive Overview & EDA**: Summary KPIs and interactive Plotly distributions.
-  - **🔍 Individual Customer Predictor**: Profile form, fine-grained risk band badge, projected 24-Mo CLV, revenue at risk, SHAP breakdown, retention recommendations, What-If simulator, and 12-month churn trajectory forecast.
+  - **🔍 Individual Customer Predictor**: Profile form, fine-grained risk band badge, projected 24-Mo CLV, revenue at risk, SHAP breakdown, retention recommendations, What-If simulator, 12-month churn trajectory forecast, and 24-month survival curve.
   - **📂 Batch CSV Predictor**: Upload customer CSV files with schema validation, portfolio CLV financial loss summary, risk distribution donut chart, cohort segmentation explorer, model fairness audit, retention campaign ROI simulator, dual CSV exports, and intervention tasklist report.
-  - **🤖 Model Performance & Metrics**: Model evaluation comparison tables, ROC-AUC benchmarks, Global SHAP importance charts, and Champion-Challenger leaderboard.
+  - **🤖 Model Performance & Metrics**: Model evaluation comparison tables, ROC-AUC benchmarks, Global SHAP importance charts, Champion-Challenger leaderboard, and automated retraining pipeline trigger.
   - **📈 Data Drift & Audit Logs**: Model registry metadata, per-feature KS drift analysis with upload comparison, prediction audit log viewer, and data quality profiler.
 
 ---
@@ -82,7 +84,9 @@ D:\Projects\AIML\
 │   ├── data_profiler.py       # Dataset column profiler and data quality checker
 │   ├── risk_classifier.py     # Fine-grained risk band classifier and confidence scorer
 │   ├── trend_projector.py     # Multi-period churn trajectory projector
-│   └── retention_roi.py       # Customer retention campaign financial ROI simulator
+│   ├── retention_roi.py       # Customer retention campaign financial ROI simulator
+│   ├── retrain_pipeline.py    # Automated model retraining pipeline and challenger promoter
+│   └── survival_simulator.py  # Customer survival curve and hazard rate simulator
 ├── tests/
 │   ├── test_config.py
 │   ├── test_data_loader.py
@@ -102,7 +106,9 @@ D:\Projects\AIML\
 │   ├── test_data_profiler.py
 │   ├── test_risk_classifier.py
 │   ├── test_trend_projector.py
-│   └── test_retention_roi.py
+│   ├── test_retention_roi.py
+│   ├── test_retrain_pipeline.py
+│   └── test_survival_simulator.py
 ├── app.py                     # 5-tab Streamlit web application
 ├── requirements.txt           # Python dependencies
 └── README.md                  # Documentation
