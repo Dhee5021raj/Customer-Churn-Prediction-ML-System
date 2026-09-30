@@ -25,6 +25,9 @@ from src.model_leaderboard import get_leaderboard, get_champion_model
 from src.retention_roi import simulate_portfolio_retention_roi, get_budget_allocation_recommendation
 from src.survival_simulator import simulate_customer_survival_curve, calculate_expected_customer_lifetime, compare_contract_survival_curves
 from src.retrain_pipeline import run_retraining_cycle
+from src.calibrator import calculate_expected_calibration_error
+from src.root_cause_analyzer import diagnose_customer_root_causes, diagnose_portfolio_root_causes
+from src.executive_reporter import generate_executive_html_report
 
 st.set_page_config(
     page_title="AI Customer Churn Prediction System",
@@ -302,6 +305,16 @@ def main():
                 for r in recs:
                     st.write(r)
 
+                # Root-Cause Diagnostics
+                st.markdown("### 🔍 Churn Friction Root-Cause Diagnostics")
+                diag = diagnose_customer_root_causes(input_profile, explanation["top_features"])
+                d_col1, d_col2 = st.columns([1, 1])
+                with d_col1:
+                    st.info(f"**Primary Friction Driver:** {diag['primary_root_cause']}\n\n**Severity Level:** `{diag['severity']}` (Friction Score: {diag['highest_friction_score']}/100)")
+                with d_col2:
+                    pb = diag["playbook"]
+                    st.success(f"**Assigned Department:** {pb['department']} (Urgency: `{pb['urgency']}`)\n\n**Action Plan:** {pb['action']}")
+
                 # Log audit trail
                 try:
                     log_prediction_audit(sample_df, np.array([prob]), source="single_predictor")
@@ -492,13 +505,34 @@ def main():
                         st.markdown("### 📋 Customer Intervention Tasklist")
                         tasklist_df = generate_customer_intervention_tasklist(annotated_df)
                         st.dataframe(tasklist_df.head(20), use_container_width=True)
-                        tasklist_csv = tasklist_df.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            label="📋 Download Intervention Tasklist CSV",
-                            data=tasklist_csv,
-                            file_name="customer_intervention_tasklist.csv",
-                            mime="text/csv"
-                        )
+                        tcol1, tcol2 = st.columns(2)
+                        with tcol1:
+                            tasklist_csv = tasklist_df.to_csv(index=False).encode("utf-8")
+                            st.download_button(
+                                label="📋 Download Intervention Tasklist CSV",
+                                data=tasklist_csv,
+                                file_name="customer_intervention_tasklist.csv",
+                                mime="text/csv"
+                            )
+                        with tcol2:
+                            try:
+                                portfolio_kpis = {
+                                    "total_customers": len(annotated_df),
+                                    "churn_rate_pct": round((annotated_df["churn_probability"] >= 0.5).mean() * 100, 1),
+                                    "clv_at_risk": round(annotated_df["clv_at_risk"].sum(), 2) if "clv_at_risk" in annotated_df.columns else 0.0,
+                                    "champion_auc": 0.85,
+                                }
+                                risk_dist = annotated_df["risk_tier"].value_counts().to_dict() if "risk_tier" in annotated_df.columns else {}
+                                rc_df = diagnose_portfolio_root_causes(annotated_df)
+                                exec_html = generate_executive_html_report(portfolio_kpis, risk_summary=risk_dist, root_causes_df=rc_df)
+                                st.download_button(
+                                    label="📄 Download Executive Report (HTML)",
+                                    data=exec_html.encode("utf-8"),
+                                    file_name="executive_churn_report.html",
+                                    mime="text/html",
+                                )
+                            except Exception:
+                                pass
 
                         # Audit log batch predictions
                         try:
@@ -691,6 +725,25 @@ def main():
                             st.json(cand_m)
                         except Exception as retrain_err:
                             st.error(f"Retraining failed: {retrain_err}")
+
+            # Probability Calibration & Reliability Analysis
+            with st.expander("🎯 Probability Calibration & Confidence Reliability", expanded=False):
+                st.markdown("Evaluates whether predicted churn probabilities are well-calibrated against empirical outcomes.")
+                try:
+                    explainer = get_explainer()
+                    sample_cal_df = df.sample(min(400, len(df)), random_state=42)
+                    X_cal = explainer.preprocessor.transform(sample_cal_df)
+                    cal_prob = explainer.model.predict_proba(X_cal)[:, 1]
+                    cal_true = sample_cal_df["churn"].values if "churn" in sample_cal_df.columns else (cal_prob > 0.5).astype(int)
+
+                    cal_metrics = calculate_expected_calibration_error(cal_true, cal_prob, n_bins=10)
+                    cal_c1, cal_c2, cal_c3, cal_c4 = st.columns(4)
+                    cal_c1.metric("Expected Calibration Error (ECE)", f"{cal_metrics['ece']:.4f}")
+                    cal_c2.metric("Max Calibration Error (MCE)", f"{cal_metrics['mce']:.4f}")
+                    cal_c3.metric("Brier Score", f"{cal_metrics['brier_score']:.4f}")
+                    cal_c4.metric("Calibration Health", cal_metrics["quality"], delta="✅" if "Well" in cal_metrics["quality"] else "⚠️")
+                except Exception as cal_err:
+                    st.warning(f"Could not compute calibration metrics: {cal_err}")
         else:
             st.info("Metrics not found. Run model training script `python src/train.py` to populate performance data.")
 

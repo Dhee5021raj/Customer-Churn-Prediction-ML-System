@@ -28,13 +28,16 @@ An end-to-end Machine Learning system for predicting customer churn risk, analyz
 - **Customer Retention Campaign ROI Simulator**: Simulates campaign economics, break-even customer volume, payback ratio, and optimal tier-based budget allocation ([`src/retention_roi.py`](file:///D:/Projects/AIML/src/retention_roi.py)).
 - **Automated Model Retraining Pipeline**: Monitors data drift triggers, trains candidate challenger models, compares against active champion, and conditionally promotes model artifacts ([`src/retrain_pipeline.py`](file:///D:/Projects/AIML/src/retrain_pipeline.py)).
 - **Customer Survival Curve & Hazard Rate Simulator**: Actuarial customer retention survival modeling ($S(t)$), hazard functions ($h(t)$), and median half-life tenure forecasting ([`src/survival_simulator.py`](file:///D:/Projects/AIML/src/survival_simulator.py)).
+- **Model Probability Calibration Analyzer**: Evaluates prediction reliability using Expected Calibration Error (ECE), Maximum Calibration Error (MCE), and Brier Score ([`src/calibrator.py`](file:///D:/Projects/AIML/src/calibrator.py)).
+- **Customer Churn Root-Cause Diagnostic Engine**: Translates complex feature attributions into strategic business friction categories with departmental action playbooks ([`src/root_cause_analyzer.py`](file:///D:/Projects/AIML/src/root_cause_analyzer.py)).
+- **Automated Executive Intelligence Report Generator**: Compiles C-suite styled, standalone executive HTML intelligence reports with dark-mode styling and KPI cards ([`src/executive_reporter.py`](file:///D:/Projects/AIML/src/executive_reporter.py)).
 - **Centralized Configuration & Logging**: Manages system paths, feature definitions, and pipeline logs ([`src/config.py`](file:///D:/Projects/AIML/src/config.py)).
-- **Automated Test Suite**: 99 comprehensive unit tests across all analytical and ML modules ([`tests/`](file:///D:/Projects/AIML/tests/)).
+- **Automated Test Suite**: 111 comprehensive unit tests across all analytical and ML modules ([`tests/`](file:///D:/Projects/AIML/tests/)).
 - **Interactive 5-Tab Streamlit Web Dashboard** ([`app.py`](file:///D:/Projects/AIML/app.py)):
   - **📊 Executive Overview & EDA**: Summary KPIs and interactive Plotly distributions.
-  - **🔍 Individual Customer Predictor**: Profile form, fine-grained risk band badge, projected 24-Mo CLV, revenue at risk, SHAP breakdown, retention recommendations, What-If simulator, 12-month churn trajectory forecast, and 24-month survival curve.
-  - **📂 Batch CSV Predictor**: Upload customer CSV files with schema validation, portfolio CLV financial loss summary, risk distribution donut chart, cohort segmentation explorer, model fairness audit, retention campaign ROI simulator, dual CSV exports, and intervention tasklist report.
-  - **🤖 Model Performance & Metrics**: Model evaluation comparison tables, ROC-AUC benchmarks, Global SHAP importance charts, Champion-Challenger leaderboard, and automated retraining pipeline trigger.
+  - **🔍 Individual Customer Predictor**: Profile form, fine-grained risk band badge, projected 24-Mo CLV, revenue at risk, SHAP breakdown, retention recommendations, root-cause diagnostics, What-If simulator, 12-month churn trajectory forecast, and 24-month survival curve.
+  - **📂 Batch CSV Predictor**: Upload customer CSV files with schema validation, portfolio CLV financial loss summary, risk distribution donut chart, cohort segmentation explorer, model fairness audit, retention campaign ROI simulator, executive HTML report export, dual CSV exports, and intervention tasklist report.
+  - **🤖 Model Performance & Metrics**: Model evaluation comparison tables, ROC-AUC benchmarks, Global SHAP importance charts, Champion-Challenger leaderboard, probability calibration reliability metrics, and automated retraining pipeline trigger.
   - **📈 Data Drift & Audit Logs**: Model registry metadata, per-feature KS drift analysis with upload comparison, prediction audit log viewer, and data quality profiler.
 
 ---
@@ -86,7 +89,10 @@ D:\Projects\AIML\
 │   ├── trend_projector.py     # Multi-period churn trajectory projector
 │   ├── retention_roi.py       # Customer retention campaign financial ROI simulator
 │   ├── retrain_pipeline.py    # Automated model retraining pipeline and challenger promoter
-│   └── survival_simulator.py  # Customer survival curve and hazard rate simulator
+│   ├── survival_simulator.py  # Customer survival curve and hazard rate simulator
+│   ├── calibrator.py          # Model calibration and reliability analyzer (ECE, MCE)
+│   ├── root_cause_analyzer.py # Customer churn root-cause diagnostic engine
+│   └── executive_reporter.py  # Automated executive HTML intelligence report generator
 ├── tests/
 │   ├── test_config.py
 │   ├── test_data_loader.py
@@ -108,7 +114,10 @@ D:\Projects\AIML\
 │   ├── test_trend_projector.py
 │   ├── test_retention_roi.py
 │   ├── test_retrain_pipeline.py
-│   └── test_survival_simulator.py
+│   ├── test_survival_simulator.py
+│   ├── test_calibrator.py
+│   ├── test_root_cause_analyzer.py
+│   └── test_executive_reporter.py
 ├── app.py                     # 5-tab Streamlit web application
 ├── requirements.txt           # Python dependencies
 └── README.md                  # Documentation
