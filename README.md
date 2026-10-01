@@ -31,14 +31,17 @@ An end-to-end Machine Learning system for predicting customer churn risk, analyz
 - **Model Probability Calibration Analyzer**: Evaluates prediction reliability using Expected Calibration Error (ECE), Maximum Calibration Error (MCE), and Brier Score ([`src/calibrator.py`](file:///D:/Projects/AIML/src/calibrator.py)).
 - **Customer Churn Root-Cause Diagnostic Engine**: Translates complex feature attributions into strategic business friction categories with departmental action playbooks ([`src/root_cause_analyzer.py`](file:///D:/Projects/AIML/src/root_cause_analyzer.py)).
 - **Automated Executive Intelligence Report Generator**: Compiles C-suite styled, standalone executive HTML intelligence reports with dark-mode styling and KPI cards ([`src/executive_reporter.py`](file:///D:/Projects/AIML/src/executive_reporter.py)).
+- **Customer Churn Uplift & Sensitivity Modeler**: Maps customers into causal uplift quadrants (Persuadables, Sure Things, Lost Causes, Sleeping Dogs) to maximize outreach efficiency ([`src/uplift_modeler.py`](file:///D:/Projects/AIML/src/uplift_modeler.py)).
+- **Automated Churn Alert & Incident Dispatcher**: Real-time rule engine monitoring VIP customer exposure, portfolio churn surges, data drift, and calibration decay with Slack/Teams payloads ([`src/alert_dispatcher.py`](file:///D:/Projects/AIML/src/alert_dispatcher.py)).
+- **Retention A/B Test Power & Significance Calculator**: Statistical experimentation engine for calculating test sample sizes and evaluating two-proportion hypothesis tests ([`src/ab_test_calculator.py`](file:///D:/Projects/AIML/src/ab_test_calculator.py)).
 - **Centralized Configuration & Logging**: Manages system paths, feature definitions, and pipeline logs ([`src/config.py`](file:///D:/Projects/AIML/src/config.py)).
-- **Automated Test Suite**: 111 comprehensive unit tests across all analytical and ML modules ([`tests/`](file:///D:/Projects/AIML/tests/)).
+- **Automated Test Suite**: 130 comprehensive unit tests across all analytical and ML modules ([`tests/`](file:///D:/Projects/AIML/tests/)).
 - **Interactive 5-Tab Streamlit Web Dashboard** ([`app.py`](file:///D:/Projects/AIML/app.py)):
   - **📊 Executive Overview & EDA**: Summary KPIs and interactive Plotly distributions.
-  - **🔍 Individual Customer Predictor**: Profile form, fine-grained risk band badge, projected 24-Mo CLV, revenue at risk, SHAP breakdown, retention recommendations, root-cause diagnostics, What-If simulator, 12-month churn trajectory forecast, and 24-month survival curve.
-  - **📂 Batch CSV Predictor**: Upload customer CSV files with schema validation, portfolio CLV financial loss summary, risk distribution donut chart, cohort segmentation explorer, model fairness audit, retention campaign ROI simulator, executive HTML report export, dual CSV exports, and intervention tasklist report.
+  - **🔍 Individual Customer Predictor**: Profile form, fine-grained risk band badge, projected 24-Mo CLV, revenue at risk, SHAP breakdown, retention recommendations, root-cause diagnostics, uplift sensitivity badge, What-If simulator, 12-month churn trajectory forecast, and 24-month survival curve.
+  - **📂 Batch CSV Predictor**: Upload customer CSV files with schema validation, portfolio CLV financial loss summary, risk distribution donut chart, cohort segmentation explorer, model fairness audit, retention campaign ROI simulator, A/B test power planner, executive HTML report export, dual CSV exports, and intervention tasklist report.
   - **🤖 Model Performance & Metrics**: Model evaluation comparison tables, ROC-AUC benchmarks, Global SHAP importance charts, Champion-Challenger leaderboard, probability calibration reliability metrics, and automated retraining pipeline trigger.
-  - **📈 Data Drift & Audit Logs**: Model registry metadata, per-feature KS drift analysis with upload comparison, prediction audit log viewer, and data quality profiler.
+  - **📈 Data Drift & Audit Logs**: Model registry metadata, operational alert rules monitor, per-feature KS drift analysis with upload comparison, prediction audit log viewer, and data quality profiler.
 
 ---
 
@@ -92,7 +95,10 @@ D:\Projects\AIML\
 │   ├── survival_simulator.py  # Customer survival curve and hazard rate simulator
 │   ├── calibrator.py          # Model calibration and reliability analyzer (ECE, MCE)
 │   ├── root_cause_analyzer.py # Customer churn root-cause diagnostic engine
-│   └── executive_reporter.py  # Automated executive HTML intelligence report generator
+│   ├── executive_reporter.py  # Automated executive HTML intelligence report generator
+│   ├── uplift_modeler.py      # Customer churn uplift & incrementality sensitivity modeler
+│   ├── alert_dispatcher.py    # Automated operational alert rules & webhook dispatcher
+│   └── ab_test_calculator.py  # Retention A/B test power & hypothesis test calculator
 ├── tests/
 │   ├── test_config.py
 │   ├── test_data_loader.py
@@ -117,7 +123,10 @@ D:\Projects\AIML\
 │   ├── test_survival_simulator.py
 │   ├── test_calibrator.py
 │   ├── test_root_cause_analyzer.py
-│   └── test_executive_reporter.py
+│   ├── test_executive_reporter.py
+│   ├── test_uplift_modeler.py
+│   ├── test_alert_dispatcher.py
+│   └── test_ab_test_calculator.py
 ├── app.py                     # 5-tab Streamlit web application
 ├── requirements.txt           # Python dependencies
 └── README.md                  # Documentation

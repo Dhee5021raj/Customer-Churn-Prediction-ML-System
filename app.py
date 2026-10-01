@@ -28,6 +28,9 @@ from src.retrain_pipeline import run_retraining_cycle
 from src.calibrator import calculate_expected_calibration_error
 from src.root_cause_analyzer import diagnose_customer_root_causes, diagnose_portfolio_root_causes
 from src.executive_reporter import generate_executive_html_report
+from src.uplift_modeler import classify_uplift_quadrant, segment_portfolio_by_uplift
+from src.alert_dispatcher import evaluate_alert_rules, format_webhook_payload
+from src.ab_test_calculator import calculate_sample_size_for_retention_test, evaluate_ab_test_results
 
 st.set_page_config(
     page_title="AI Customer Churn Prediction System",
@@ -242,6 +245,10 @@ def main():
                     rev_risk = round(est_clv * prob, 2)
                     st.metric("Projected 24-Mo CLV", f"${est_clv:,.2f}")
                     st.metric("Revenue at Risk", f"${rev_risk:,.2f}")
+
+                    sim_uplift = round(prob * 0.35, 4) if prob >= 0.35 else 0.05
+                    uplift_diag = classify_uplift_quadrant(prob, sim_uplift)
+                    st.success(f"**🎯 Uplift Segment:** {uplift_diag['quadrant']}\n\n**Strategy:** {uplift_diag['targeting_priority']}")
 
                 with pcol2:
                     st.markdown("#### SHAP Feature Impact Breakdown (Top Drivers)")
@@ -641,6 +648,22 @@ def main():
                         except Exception as e:
                             st.warning(f"ROI simulation failed: {e}")
 
+                        # ── Retention Experiment A/B Test Planner ───────────
+                        st.markdown("---")
+                        with st.expander("🧪 Retention Experiment A/B Test Power & Sample Size Planner", expanded=False):
+                            st.markdown("Calculate statistical power and required customer sample size per treatment variant to validate retention interventions.")
+                            ab_col1, ab_col2, ab_col3 = st.columns(3)
+                            base_churn_in = ab_col1.slider("Baseline Churn Rate (%)", min_value=5, max_value=60, value=25, step=1) / 100.0
+                            mde_in = ab_col2.slider("Target Churn Reduction (%)", min_value=5, max_value=50, value=20, step=5) / 100.0
+                            power_in = ab_col3.selectbox("Statistical Power (1 - β)", [0.80, 0.90], index=0)
+
+                            ab_plan = calculate_sample_size_for_retention_test(base_churn_in, mde_in, power=power_in)
+                            
+                            ab_m1, ab_m2, ab_m3 = st.columns(3)
+                            ab_m1.metric("Required per Arm", f"{ab_plan['sample_size_per_variant']:,} cust")
+                            ab_m2.metric("Total Test Volume", f"{ab_plan['total_sample_size']:,} cust")
+                            ab_m3.metric("Detectable Target Churn", f"{ab_plan['target_churn_rate']*100:.1f}%", f"-{ab_plan['relative_reduction_pct']}%", delta_color="inverse")
+
                     except Exception as e:
                         st.error(f"Error processing batch file: {str(e)}")
 
@@ -766,6 +789,25 @@ def main():
                 st.info("No model registry found. Run `python src/train.py` first.")
         except Exception as e:
             st.warning(f"Could not load registry: {e}")
+
+        st.markdown("---")
+
+        # Operational Alert Rules Monitor
+        st.markdown("### 🚨 Operational Incident & Alert Rules Monitor")
+        st.caption("Automated rule engine monitoring VIP customer churn risk, drift thresholds, and probability calibration.")
+        try:
+            active_alerts = evaluate_alert_rules(df=df)
+            if active_alerts:
+                for al in active_alerts:
+                    sev = al.get("severity", "INFO")
+                    if sev == "CRITICAL":
+                        st.error(f"**{al['title']}**\n\n{al['description']}")
+                    else:
+                        st.warning(f"**{al['title']}**\n\n{al['description']}")
+            else:
+                st.success("✅ All system operational health checks normal. Zero active alert triggers.")
+        except Exception as alert_ex:
+            st.warning(f"Could not evaluate alerts: {alert_ex}")
 
         st.markdown("---")
 
